@@ -3,6 +3,7 @@ import os
 import random
 import csv
 import argparse
+from tqdm import tqdm
 
 def map_filenames(filenames):
     """
@@ -26,7 +27,7 @@ def map_filenames(filenames):
 
 def make_pools(input_bam_path,output_bam_path,number_of_samples):
     #check if the number of samples is a perfect square
-    if int(number_of_samples*0.5)!=number_of_samples*0.5:
+    if int(number_of_samples**0.5)!=number_of_samples**0.5:
         print("The number of samples is not a perfect square")
         return
     number_of_samples_per_pool=int(number_of_samples**0.5)
@@ -66,15 +67,22 @@ def make_pools(input_bam_path,output_bam_path,number_of_samples):
             c_index = number_of_samples_per_pool - (b_index - a_index)
         #Open Sample File
         sam_file = pysam.AlignmentFile(os.path.join(input_bam_path,index2name["S"+str(i+1)+".bam"]), "rb")
-        for read in sam_file:
-            #Sample the read into one of the three choices
-            pool_choice = random.choice(["a", "b", "c"])
-            if pool_choice == "a":
-                PoolFiles["pool_"+str(a_index+1)].write(read)
-            elif pool_choice == "b":
-                PoolFiles["pool_"+str(b_index+1+number_of_samples_per_pool)].write(read)
-            else:
-                PoolFiles["pool_"+str(c_index+1+(2* number_of_samples_per_pool))].write(read)
+        # Use tqdm with an explicit total count
+        with tqdm(total=sam_file.mapped, desc="Processing Reads from {}".format(index2name["S"+str(i+1)+".bam"])) as pbar:
+            for read in sam_file:                
+                pbar.update(1)  # Manually update progress bar
+                depth_reduction = 0.1
+                sample = random.uniform(0, 1) 
+                if sample < depth_reduction:
+                    continue 
+                #Sample the read into one of the three choices
+                pool_choice = random.choice(["a", "b", "c"])
+                if pool_choice == "a":
+                    PoolFiles["pool_"+str(a_index+1)].write(read)
+                elif pool_choice == "b":
+                    PoolFiles["pool_"+str(b_index+1+number_of_samples_per_pool)].write(read)
+                else:
+                    PoolFiles["pool_"+str(c_index+1+(2* number_of_samples_per_pool))].write(read)
         sam_file.close()
         print("sample - {} processed!".format(index2name["S"+str(i+1)+".bam"]))
 
