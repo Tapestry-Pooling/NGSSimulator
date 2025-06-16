@@ -26,7 +26,7 @@ def map_filenames(filenames):
 
 def make_pools(input_bam_path,output_bam_path,number_of_samples):
     #check if the number of samples is a perfect square
-    if int(number_of_samples*0.5)!=number_of_samples*0.5:
+    if int(number_of_samples**0.5)!=number_of_samples**0.5:
         print("The number of samples is not a perfect square")
         return
     number_of_samples_per_pool=int(number_of_samples**0.5)
