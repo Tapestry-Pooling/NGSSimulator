@@ -3,6 +3,49 @@ import os
 import random
 import csv
 import argparse
+import tempfile
+import shutil
+
+def sort_and_index_bam_inplace(bam_path):
+    """
+    Sorts a BAM file in place (replaces the original file with its sorted version)
+    and creates a BAI index file.
+
+    Parameters
+    ----------
+    bam_path : str
+        Path to the input BAM file.
+
+    Returns
+    -------
+    sorted_bam_path : str
+        Path to the sorted BAM file (same as input).
+    bai_path : str
+        Path to the generated BAI index file.
+    """
+    bam_path = os.path.abspath(bam_path)
+    dir_name = os.path.dirname(bam_path)
+    base_name = os.path.basename(bam_path)
+
+    # Temporary sorted file path
+    with tempfile.NamedTemporaryFile(dir=dir_name, suffix=".bam", delete=False) as tmp:
+        tmp_sorted_bam = tmp.name
+
+    # Sort BAM to temporary file
+    print(f"Sorting BAM file: {bam_path}")
+    pysam.sort("-o", tmp_sorted_bam, bam_path)
+
+    # Replace the original file with the sorted one
+    shutil.move(tmp_sorted_bam, bam_path)
+
+    # Create BAM index (.bai)
+    print(f"Indexing BAM file: {bam_path}")
+    pysam.index(bam_path)
+
+    bai_path = bam_path + ".bai"
+    print(f"✅ Done: {bam_path} and {bai_path} created.")
+
+    return bam_path, bai_path
 
 def map_filenames(filenames):
     """
@@ -82,6 +125,9 @@ def make_pools(input_bam_path,output_bam_path,number_of_samples):
         files.close()
     template_file.close()
     print("pooling completed!!")
+    pool_bams = os.listdir(output_bam_path)
+    for pool_bam in pool_bams:
+        sort_and_index_bam_inplace(os.path.join(output_bam_path, pool_bam))
     return
 
 if __name__ == "__main__":
