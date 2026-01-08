@@ -47,17 +47,26 @@ def sort_and_index_bam_inplace(bam_path):
 
     return bam_path, bai_path
 
-def map_filenames(filenames):
+def map_filenames(filenames, number_of_samples_per_pool):
     """
-    Maps file names to S1, S2, ..., Sn and saves the mapping as sample_name_mapping.csv.
+    Maps file names to CiRj and saves the mapping as sample_name_mapping.csv.
     
     Parameters:
         filenames (list of str): List of file names.
     
     Returns:
-        dict: Mapping of file names to S1, S2, ..., Sn.
+        dict: Mapping of file names to C1R1, C1R2, ..., CnRm.
     """
-    mapping = {filename: f"S{i+1}.bam" for i, filename in enumerate(filenames)}
+    number_of_samples = len(filenames)
+    a = []
+    b = []
+    for i in range(number_of_samples):
+        #Find the Indices for the pools
+        a_index, b_index = divmod(i,number_of_samples_per_pool) #find matrix index in column major
+        a.append(a_index)
+        b.append(b_index)
+
+    mapping = {filename: f"C{a[i]+1}R{b[i]+1}.bam" for i, filename in enumerate(filenames)}
     
     # Save to CSV
     with open("sample_name_mapping.csv", mode="w", newline="") as file:
@@ -85,10 +94,10 @@ def make_pools(input_bam_path,output_bam_path,number_of_samples):
         return
 
     bam_files = sorted([f for f in os.listdir(input_bam_path) if f.endswith(".bam")])
-    name2index = map_filenames(bam_files)
+    name2index = map_filenames(bam_files, number_of_samples_per_pool)
     index2name = {v: k for k, v in name2index.items()}
     #Using the first file as a template for the header
-    template_file = pysam.AlignmentFile(os.path.join(input_bam_path, index2name["S1.bam"]), "rb")
+    template_file = pysam.AlignmentFile(os.path.join(input_bam_path, index2name["C1R1.bam"]), "rb")
 
     #mkdir while deleting the existing directory for output
     if os.path.exists(output_bam_path):
@@ -97,8 +106,14 @@ def make_pools(input_bam_path,output_bam_path,number_of_samples):
     os.mkdir(output_bam_path)
 
     PoolFiles = {}
-    for i in range(3* number_of_samples_per_pool):
-        PoolFiles["pool_"+str(i+1)]=pysam.AlignmentFile(os.path.join(output_bam_path,"pool_"+str(i+1)+".bam"),"wb",template=template_file)
+    for i in range(number_of_samples_per_pool):
+        PoolFiles["C"+str(i+1)]=pysam.AlignmentFile(os.path.join(output_bam_path,"C"+str(i+1)+".bam"),"wb",template=template_file)
+
+    for i in range(number_of_samples_per_pool):
+        PoolFiles["R"+str(i+1)]=pysam.AlignmentFile(os.path.join(output_bam_path,"R"+str(i+1)+".bam"),"wb",template=template_file)
+
+    for i in range(number_of_samples_per_pool):
+        PoolFiles["D"+str(i+1)]=pysam.AlignmentFile(os.path.join(output_bam_path,"D"+str(i+1)+".bam"),"wb",template=template_file)
 
     for i in range(number_of_samples):
         #Find the Indices for the pools
@@ -108,18 +123,18 @@ def make_pools(input_bam_path,output_bam_path,number_of_samples):
         else:
             c_index = number_of_samples_per_pool - (b_index - a_index)
         #Open Sample File
-        sam_file = pysam.AlignmentFile(os.path.join(input_bam_path,index2name["S"+str(i+1)+".bam"]), "rb")
+        sam_file = pysam.AlignmentFile(os.path.join(input_bam_path,index2name[f"C{a_index+1}R{b_index+1}.bam"]), "rb")
         for read in sam_file:
             #Sample the read into one of the three choices
             pool_choice = random.choice(["a", "b", "c"])
             if pool_choice == "a":
-                PoolFiles["pool_"+str(a_index+1)].write(read)
+                PoolFiles["C"+str(a_index+1)].write(read)
             elif pool_choice == "b":
-                PoolFiles["pool_"+str(b_index+1+number_of_samples_per_pool)].write(read)
+                PoolFiles["R"+str(b_index+1)].write(read)
             else:
-                PoolFiles["pool_"+str(c_index+1+(2* number_of_samples_per_pool))].write(read)
+                PoolFiles["D"+str(c_index+1)].write(read)
         sam_file.close()
-        print("sample - {} processed!".format(index2name["S"+str(i+1)+".bam"]))
+        print("sample - {} processed!".format(index2name[f"C{a_index+1}R{b_index+1}.bam"]))
 
     for files in PoolFiles.values():
         files.close()
